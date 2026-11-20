@@ -1,0 +1,38 @@
+name: Resource pack SHA-1
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, for example v1.3.1'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  calculate-sha1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Calculate and attach SHA-1
+        shell: bash
+        run: |
+          set -euo pipefail
+          pack_dir="$RUNNER_TEMP/minelunar-pack"
+          mkdir -p "$pack_dir"
+          gh release download --pattern 'Minelunar.zip' --dir "$pack_dir" -- "$RELEASE_TAG"
+          hash="$(sha1sum "$pack_dir/Minelunar.zip" | awk '{print $1}')"
+          printf '%s\n' "$hash" > "$pack_dir/Minelunar.sha1"
+          {
+            printf '### Resource pack SHA-1\n\n'
+            printf '```properties\nresource-pack-sha1=%s\n```\n' "$hash"
+          } >> "$GITHUB_STEP_SUMMARY"
+          gh release upload --clobber -- "$RELEASE_TAG" "$pack_dir/Minelunar.sha1"
